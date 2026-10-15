@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -e
+
+case ${1:-} in
+    start)
+        systemctl --user enable --now low-battery-guard.timer
+        printf '배터리 감시를 켰습니다. (10%% 이하에서 경고)\n'
+        ;;
+    stop)
+        systemctl --user disable --now low-battery-guard.timer
+        systemctl --user stop low-battery-guard.service
+        printf '배터리 감시를 껐습니다.\n'
+        ;;
+    status)
+        systemctl --user status low-battery-guard.timer --no-pager
+        ;;
+    *)
+        printf '사용법: battery-guard {start|stop|status}\n' >&2
+        exit 2
+        ;;
+esac

@@ -1,0 +1,7 @@
+[Unit]
+Description=Warn once before low-battery suspend
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/libexec/battery-guard/low-battery-guard

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+set -u
+
+threshold=10
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/battery-guard"
+handled="$state_dir/handled"
+
+# BAT* excludes most peripheral batteries exposed through power_supply.
+for candidate in /sys/class/power_supply/BAT*; do
+    [[ -r "$candidate/type" && -r "$candidate/capacity" && -r "$candidate/status" ]] || continue
+    IFS= read -r battery_type < "$candidate/type" || continue
+    [[ $battery_type == Battery ]] || continue
+    battery=$candidate
+    break
+done
+[[ -n ${battery:-} ]] || exit 0
+
+IFS= read -r capacity < "$battery/capacity" || exit 0
+[[ $capacity =~ ^[0-9]+$ ]] || exit 0
+
+if (( capacity > threshold )); then
+    rm -f -- "$handled"
+    exit 0
+fi
+
+[[ -e "$handled" ]] && exit 0
+IFS= read -r status < "$battery/status" || exit 0
+[[ $status == Discharging ]] || exit 0
+[[ -n ${DISPLAY:-}${WAYLAND_DISPLAY:-} ]] || exit 0
+systemctl --user is-active --quiet graphical-session.target || exit 0
+command -v gnome-terminal >/dev/null || exit 0
+
+mkdir -p -- "$state_dir" || exit 0
+# A prompt is allowed only once per low-battery episode.
+printf 'handled\n' > "$handled" || exit 0
+
+runtime_dir=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+result_dir=$(mktemp -d "$runtime_dir/battery-guard.XXXXXXXX") || exit 0
+trap 'rm -rf -- "$result_dir"' EXIT
+
+script_dir=$(dirname -- "${BASH_SOURCE[0]}")
+gnome-terminal --wait -- /usr/bin/bash "$script_dir/low-battery-prompt" "$result_dir/result" || exit 0
+[[ -f "$result_dir/result" ]] || exit 0
+
+# Charging or a recovered battery level cancels the pending suspend.
+IFS= read -r capacity < "$battery/capacity" || exit 0
+IFS= read -r status < "$battery/status" || exit 0
+[[ $capacity =~ ^[0-9]+$ ]] || exit 0
+(( capacity <= threshold )) || exit 0
+[[ $status == Discharging ]] || exit 0
+
+systemctl suspend

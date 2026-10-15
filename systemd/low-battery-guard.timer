@@ -1,0 +1,11 @@
+[Unit]
+Description=Check laptop battery once a minute
+
+[Timer]
+OnStartupSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+Unit=low-battery-guard.service
+
+[Install]
+WantedBy=timers.target
